@@ -507,4 +507,38 @@ def main():
 if __name__ == '__main__':
 
     main()
+def main():
+    # إعدادات Railway
+    port = int(os.environ.get("PORT", 8443))
+    
+    application = Application.builder().token(BOT_TOKEN).build()
+    
+    # إضافة handlers
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND, 
+        handle_all_messages
+    ))
+    application.add_handler(CallbackQueryHandler(button_handler))
+    
+    print("🚀 البوت المتقدم يعمل الآن على Railway!")
+    print("🔄 نظام متعدد APIs مع fallbacks تلقائية")
+    print("💾 نظام caching متقدم لتسريع الاستجابة")
+    
+    # تشغيل البوت
+    if "RAILWAY_ENVIRONMENT" in os.environ:
+        # على Railway، استخدم webhook
+        webhook_url = f"https://{os.environ.get('RAILWAY_STATIC_URL')}.railway.app"
+        application.run_webhook(
+            listen="0.0.0.0",
+            port=port,
+            url_path=BOT_TOKEN,
+            webhook_url=f"{webhook_url}/{BOT_TOKEN}"
+        )
+    else:
+        # محلياً، استخدم polling
+        application.run_polling()
+
+if __name__ == '__main__':
+    main()
 

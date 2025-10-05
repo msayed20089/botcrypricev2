@@ -8,14 +8,14 @@ from datetime import datetime
 import re
 import time
 import random
-
+import os
 # إعدادات البوت
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 
-BOT_TOKEN = "8399150202:AAEvr37r05xzbjhwinnGZQIWAuoylpsNflg"
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8399150202:AAEvr37r05xzbjhwinnGZQIWAuoylpsNflg")
 CHANNEL_LINK = "https://t.me/zforexms"
 
 # خطوط إموجيز للتصميم العصري

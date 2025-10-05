@@ -1,4 +1,3 @@
-
 import logging
 import aiohttp
 import asyncio
@@ -9,6 +8,7 @@ import re
 import time
 import random
 import os
+
 # إعدادات البوت
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -17,6 +17,8 @@ logging.basicConfig(
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8399150202:AAEvr37r05xzbjhwinnGZQIWAuoylpsNflg")
 CHANNEL_LINK = "https://t.me/zforexms"
+
+# ... باقي الكود يبقى كما هو حتى نهاية الملف ...
 
 # خطوط إموجيز للتصميم العصري
 EMOJIS = {
@@ -504,42 +506,32 @@ def main():
     
     application.run_polling()
 
-if __name__ == '__main__':
-
-    main()
 def main():
-    # إعدادات Railway
-    port = int(os.environ.get("PORT", 8443))
-    
-    application = Application.builder().token(BOT_TOKEN).build()
-    
-    # إضافة handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND, 
-        handle_all_messages
-    ))
-    application.add_handler(CallbackQueryHandler(button_handler))
-    
-    print("🚀 البوت المتقدم يعمل الآن على Railway!")
-    print("🔄 نظام متعدد APIs مع fallbacks تلقائية")
-    print("💾 نظام caching متقدم لتسريع الاستجابة")
-    
-    # تشغيل البوت
-    if "RAILWAY_ENVIRONMENT" in os.environ:
-        # على Railway، استخدم webhook
-        webhook_url = f"https://{os.environ.get('RAILWAY_STATIC_URL')}.railway.app"
-        application.run_webhook(
-            listen="0.0.0.0",
-            port=port,
-            url_path=BOT_TOKEN,
-            webhook_url=f"{webhook_url}/{BOT_TOKEN}"
-        )
-    else:
-        # محلياً، استخدم polling
+    try:
+        application = Application.builder().token(BOT_TOKEN).build()
+        
+        # إضافة handlers
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(MessageHandler(
+            filters.TEXT & ~filters.COMMAND, 
+            handle_all_messages
+        ))
+        application.add_handler(CallbackQueryHandler(button_handler))
+        
+        print("🚀 البوت المتقدم يعمل الآن على Railway!")
+        print("🔄 نظام متعدد APIs مع fallbacks تلقائية")
+        print("💾 نظام caching متقدم لتسريع الاستجابة")
+        print("⚡ أداء محسن وموثوقية عالية")
+        print("🎯 تصميم عصري مع إمكانيات متطورة")
+        
+        # تشغيل البوت (استخدام polling فقط على Railway)
         application.run_polling()
+        
+    except Exception as e:
+        print(f"❌ خطأ في تشغيل البوت: {e}")
+        # إعادة المحاولة بعد 5 ثواني
+        time.sleep(5)
+        main()
 
 if __name__ == '__main__':
     main()
-
-

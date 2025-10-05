@@ -1,3 +1,4 @@
+pip install python-telegram-bot aiohttp
 import logging
 import aiohttp
 import asyncio
@@ -504,4 +505,5 @@ def main():
     application.run_polling()
 
 if __name__ == '__main__':
+
     main()

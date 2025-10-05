@@ -18,8 +18,6 @@ logging.basicConfig(
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8399150202:AAEvr37r05xzbjhwinnGZQIWAuoylpsNflg")
 CHANNEL_LINK = "https://t.me/zforexms"
 
-# ... باقي الكود يبقى كما هو حتى نهاية الملف ...
-
 # خطوط إموجيز للتصميم العصري
 EMOJIS = {
     "welcome": "🌟", "money": "💸", "chart": "📊", "rocket": "🚀", "fire": "🔥",
@@ -73,8 +71,8 @@ class ModernBot:
 
     def create_modern_message(self, title, content, emoji="🌟"):
         """إنشاء رسالة عصرية بتصميم حديث"""
-        message = f"{emoji} ━━━━━━━━━━━━━━━ {emoji}"
-        message += f"{content}"
+        message = f"{emoji} ━━━━━━━━━━━━━━━ {emoji}\n"
+        message += f"{content}\n"
         message += f"{emoji} ━━━━━━━━━━━━━━━ {emoji}"
         return message
 
@@ -488,25 +486,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # الوظيفة الرئيسية
 def main():
-    application = Application.builder().token(BOT_TOKEN).build()
-    
-    # إضافة handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND, 
-        handle_all_messages
-    ))
-    application.add_handler(CallbackQueryHandler(button_handler))
-    
-    print("🚀 البوت المتقدم يعمل الآن!")
-    print("🔄 نظام متعدد APIs مع fallbacks تلقائية")
-    print("💾 نظام caching متقدم لتسريع الاستجابة")
-    print("⚡ أداء محسن وموثوقية عالية")
-    print("🎯 تصميم عصري مع إمكانيات متطورة")
-    
-    application.run_polling()
-
-def main():
     try:
         application = Application.builder().token(BOT_TOKEN).build()
         
@@ -524,7 +503,7 @@ def main():
         print("⚡ أداء محسن وموثوقية عالية")
         print("🎯 تصميم عصري مع إمكانيات متطورة")
         
-        # تشغيل البوت (استخدام polling فقط على Railway)
+        # تشغيل البوت
         application.run_polling()
         
     except Exception as e:

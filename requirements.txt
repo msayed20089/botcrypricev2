@@ -1,2 +1,1 @@
-python-telegram-bot==13.7
-aiohttp==3.8.4
+pip install python-telegram-bot==13.7 aiohttp==3.8.6

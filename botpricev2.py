@@ -2,7 +2,7 @@ import logging
 import aiohttp
 import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters, CallbackContext
 from datetime import datetime
 import re
 import time
@@ -340,7 +340,7 @@ def find_best_match(search_results, symbol):
     return search_results[0] if search_results else None
 
 # أمر البدء
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update: Update, context: CallbackContext):
     """بدء البوت"""
     user = update.effective_user
     
@@ -363,7 +363,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(message, reply_markup=reply_markup, parse_mode='Markdown')
 
 # معالجة الرسائل
-async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_all_messages(update: Update, context: CallbackContext):
     """معالجة جميع الرسائل"""
     
     message_text = update.message.text
@@ -457,7 +457,7 @@ async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE
                 await loading_msg.edit_text(error_message, parse_mode='Markdown')
 
 # معالجة الأزرار
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def button_handler(update: Update, context: CallbackContext):
     """معالجة الضغط على الأزرار"""
     query = update.callback_query
     await query.answer()
@@ -484,18 +484,17 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await query.edit_message_text(price_instructions, reply_markup=reply_markup, parse_mode='Markdown')
 
-# الوظيفة الرئيسية
 def main():
+    """الوظيفة الرئيسية"""
     try:
-        application = Application.builder().token(BOT_TOKEN).build()
+        # استخدام Updater القديم المتوافق
+        updater = Updater(BOT_TOKEN, use_context=True)
+        dispatcher = updater.dispatcher
         
         # إضافة handlers
-        application.add_handler(CommandHandler("start", start))
-        application.add_handler(MessageHandler(
-            filters.TEXT & ~filters.COMMAND, 
-            handle_all_messages
-        ))
-        application.add_handler(CallbackQueryHandler(button_handler))
+        dispatcher.add_handler(CommandHandler("start", start))
+        dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_all_messages))
+        dispatcher.add_handler(CallbackQueryHandler(button_handler))
         
         print("🚀 البوت المتقدم يعمل الآن على Railway!")
         print("🔄 نظام متعدد APIs مع fallbacks تلقائية")
@@ -504,7 +503,8 @@ def main():
         print("🎯 تصميم عصري مع إمكانيات متطورة")
         
         # تشغيل البوت
-        application.run_polling()
+        updater.start_polling()
+        updater.idle()
         
     except Exception as e:
         print(f"❌ خطأ في تشغيل البوت: {e}")

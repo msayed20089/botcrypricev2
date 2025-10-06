@@ -2,21 +2,23 @@ import logging
 import sqlite3
 import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters, CallbackContext
 
 # إعدادات البوت
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8399150202:AAEvr37r05xzbjhwinnGZQIWAuoylpsNflg")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "6096879850"))
+BOT_USERNAME = "lllllllofdkokbot"  # يوزر البوت الجديد
 
 # إعداد التسجيل
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
+logger = logging.getLogger(__name__)
 
 # قاعدة البيانات
 def init_db():
-    conn = sqlite3.connect('roulette.db')
+    conn = sqlite3.connect('roulette.db', check_same_thread=False)
     cursor = conn.cursor()
     
     cursor.execute('''
@@ -65,8 +67,8 @@ def init_db():
     conn.commit()
     conn.close()
 
-async def check_balance(user_id, cost=1):
-    conn = sqlite3.connect('roulette.db')
+def check_balance(user_id, cost=1):
+    conn = sqlite3.connect('roulette.db', check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute('SELECT balance FROM users WHERE user_id = ?', (user_id,))
     result = cursor.fetchone()
@@ -76,24 +78,24 @@ async def check_balance(user_id, cost=1):
         return True, result[0]
     return False, result[0] if result else 0
 
-async def deduct_points(user_id, points=1):
-    conn = sqlite3.connect('roulette.db')
+def deduct_points(user_id, points=1):
+    conn = sqlite3.connect('roulette.db', check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute('UPDATE users SET balance = balance - ? WHERE user_id = ?', (points, user_id))
     conn.commit()
     conn.close()
 
-async def add_points(user_id, points=1):
-    conn = sqlite3.connect('roulette.db')
+def add_points(user_id, points=1):
+    conn = sqlite3.connect('roulette.db', check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute('UPDATE users SET balance = balance + ? WHERE user_id = ?', (points, user_id))
     conn.commit()
     conn.close()
 
-async def generate_invite_link(user_id):
-    return f"https://t.me/RoulettePandaBot?start=ref_{user_id}"
+def generate_invite_link(user_id):
+    return f"https://t.me/{BOT_USERNAME}?start=ref_{user_id}"
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def start(update: Update, context: CallbackContext):
     user = update.effective_user
     user_id = user.id
     args = context.args
@@ -102,18 +104,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if args and args[0].startswith('ref_'):
         try:
             invited_by = int(args[0].split('_')[1])
-            await add_points(invited_by, 1)
+            add_points(invited_by, 1)
             
-            conn = sqlite3.connect('roulette.db')
+            conn = sqlite3.connect('roulette.db', check_same_thread=False)
             cursor = conn.cursor()
             cursor.execute('UPDATE users SET invitation_count = invitation_count + 1, total_invitations = total_invitations + 1 WHERE user_id = ?', (invited_by,))
             cursor.execute('INSERT INTO invitations (inviter_id, invited_id) VALUES (?, ?)', (invited_by, user_id))
             conn.commit()
             conn.close()
         except Exception as e:
-            logging.error(f"Error in referral: {e}")
+            logger.error(f"Error in referral: {e}")
     
-    conn = sqlite3.connect('roulette.db')
+    conn = sqlite3.connect('roulette.db', check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute('''
         INSERT OR REPLACE INTO users (user_id, username, first_name, invited_by) 
@@ -134,51 +136,51 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    welcome_text = f"""* 🎉 أهلاً بك {user.first_name} في روليت MS!*
+    welcome_text = f"""🎉 أهلاً بك {user.first_name} في روليت MS! 🎰
 
-🆔 *الإيدي*: {user_id}
-💰 *رصيدك*: {balance} نقطة
+🆔 الإيدي: {user_id}
+💰 رصيدك: {balance} نقطة
 
 🎰 يمكنك إنشاء روليت سريع بكلفة نقطة واحدة
 📤 ادعِ أصدقائك واكسب نقطة عن كل دعوة ناجحة"""
 
-    await update.message.reply_text(welcome_text, reply_markup=reply_markup)
+    update.message.reply_text(welcome_text, reply_markup=reply_markup)
 
-async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def handle_callback(update: Update, context: CallbackContext):
     query = update.callback_query
-    await query.answer()
+    query.answer()
     
     data = query.data
     user_id = query.from_user.id
     
     if data == "create_quick_roulette":
-        await create_roulette(query, context)
+        create_roulette(query, context)
     elif data == "my_stats":
-        await my_stats(query, context)
+        my_stats(query, context)
     elif data == "invite_link":
-        await invite_link(query, context)
+        invite_link(query, context)
     elif data == "balance":
-        await show_balance(query, context)
+        show_balance(query, context)
     elif data == "gifts":
-        await gifts_info(query, context)
+        gifts_info(query, context)
     elif data == "settings":
-        await settings_menu(query, context)
+        settings_menu(query, context)
     elif data == "support":
-        await support(query, context)
+        support(query, context)
     elif data == "main_menu":
-        await main_menu_callback(query, context)
+        main_menu_callback(query, context)
     elif data.startswith("join_roulette_"):
-        await join_roulette(query, context)
+        join_roulette(query, context)
     elif data.startswith("stop_roulette_"):
-        await stop_roulette(query, context)
+        stop_roulette(query, context)
 
-async def create_roulette(query, context):
+def create_roulette(query, context):
     user_id = query.from_user.id
     
-    has_balance, current_balance = await check_balance(user_id)
+    has_balance, current_balance = check_balance(user_id)
     
     if not has_balance:
-        await query.edit_message_text(
+        query.edit_message_text(
             f"❌ رصيدك غير كافي!\n\n💰 رصيدك الحالي: {current_balance} نقطة\n💡 تحتاج إلى نقطة واحدة لإنشاء روليت\n\n📤 ادعِ أصدقائك لزيادة رصيدك!",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("📤 رابط الدعوة", callback_data="invite_link")],
@@ -188,9 +190,9 @@ async def create_roulette(query, context):
         )
         return
     
-    await deduct_points(user_id, 1)
+    deduct_points(user_id, 1)
     
-    conn = sqlite3.connect('roulette.db')
+    conn = sqlite3.connect('roulette.db', check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute('INSERT INTO roulettes (creator_id, title, max_participants) VALUES (?, ?, ?)',
                    (user_id, "روليت سريع", 10))
@@ -205,7 +207,7 @@ async def create_roulette(query, context):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await query.edit_message_text(
+    query.edit_message_text(
         "🎰 *روليت سريع لـ 10 أشخاص!*\n\n"
         "📊 المشاركة ستغلق بعد اكتمال العدد\n\n"
         "👥 المشاركون: 1/10\n\n"
@@ -215,10 +217,10 @@ async def create_roulette(query, context):
         parse_mode='Markdown'
     )
 
-async def my_stats(query, context):
+def my_stats(query, context):
     user_id = query.from_user.id
     
-    conn = sqlite3.connect('roulette.db')
+    conn = sqlite3.connect('roulette.db', check_same_thread=False)
     cursor = conn.cursor()
     
     cursor.execute('SELECT balance, invitation_count, total_invitations, joined_date FROM users WHERE user_id = ?', (user_id,))
@@ -260,13 +262,13 @@ async def my_stats(query, context):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await query.edit_message_text(stats_text, reply_markup=reply_markup, parse_mode='Markdown')
+    query.edit_message_text(stats_text, reply_markup=reply_markup, parse_mode='Markdown')
 
-async def invite_link(query, context):
+def invite_link(query, context):
     user_id = query.from_user.id
-    invite_link = await generate_invite_link(user_id)
+    invite_link = generate_invite_link(user_id)
     
-    conn = sqlite3.connect('roulette.db')
+    conn = sqlite3.connect('roulette.db', check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute('SELECT invitation_count FROM users WHERE user_id = ?', (user_id,))
     result = cursor.fetchone()
@@ -290,29 +292,29 @@ async def invite_link(query, context):
 🎁 *مكافأة إضافية:* عند وصولك لـ10 دعوات ناجحة، تحصل على 5 نقاط إضافية!"""
 
     keyboard = [
-        [InlineKeyboardButton("🔗 مشاركة الرابط", url=f"https://t.me/share/url?url={invite_link}&text=انضم%20إلى%20أفضل%20بوت%20روليت%20على%20تيليجرام!%20🎰")],
+        [InlineKeyboardButton("🔗 مشاركة الرابط", url=f"https://t.me/share/url?url={invite_link}&text=انضم%20إلى%20روليت%20MS%20-%20أفضل%20بوت%20روليت%20على%20تيليجرام!%20🎰")],
         [InlineKeyboardButton("📊 إحصائياتي", callback_data="my_stats")],
         [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await query.edit_message_text(invite_text, reply_markup=reply_markup, parse_mode='Markdown')
+    query.edit_message_text(invite_text, reply_markup=reply_markup, parse_mode='Markdown')
 
-async def show_balance(query, context):
+def show_balance(query, context):
     user_id = query.from_user.id
-    conn = sqlite3.connect('roulette.db')
+    conn = sqlite3.connect('roulette.db', check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute('SELECT balance FROM users WHERE user_id = ?', (user_id,))
     result = cursor.fetchone()
     balance = result[0] if result else 5
     conn.close()
     
-    await query.edit_message_text(f"💰 رصيدك الحالي: {balance} نقطة")
+    query.edit_message_text(f"💰 رصيدك الحالي: {balance} نقطة")
 
-async def gifts_info(query, context):
+def gifts_info(query, context):
     user_id = query.from_user.id
     
-    conn = sqlite3.connect('roulette.db')
+    conn = sqlite3.connect('roulette.db', check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute('SELECT balance FROM users WHERE user_id = ?', (user_id,))
     result = cursor.fetchone()
@@ -345,9 +347,9 @@ async def gifts_info(query, context):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await query.edit_message_text(gifts_text, reply_markup=reply_markup, parse_mode='Markdown')
+    query.edit_message_text(gifts_text, reply_markup=reply_markup, parse_mode='Markdown')
 
-async def settings_menu(query, context):
+def settings_menu(query, context):
     settings_text = """⚙️ *إعدادات البوت*
 
 🔔 *الإشعارات:*
@@ -368,9 +370,9 @@ async def settings_menu(query, context):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await query.edit_message_text(settings_text, reply_markup=reply_markup, parse_mode='Markdown')
+    query.edit_message_text(settings_text, reply_markup=reply_markup, parse_mode='Markdown')
 
-async def support(query, context):
+def support(query, context):
     support_text = """📞 *الدعم الفني*
 
 للاستفسارات والدعم الفني:
@@ -392,19 +394,19 @@ async def support(query, context):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await query.edit_message_text(support_text, reply_markup=reply_markup, parse_mode='Markdown')
+    query.edit_message_text(support_text, reply_markup=reply_markup, parse_mode='Markdown')
 
-async def join_roulette(query, context):
+def join_roulette(query, context):
     try:
         roulette_id = int(query.data.split('_')[2])
         user_id = query.from_user.id
         
-        conn = sqlite3.connect('roulette.db')
+        conn = sqlite3.connect('roulette.db', check_same_thread=False)
         cursor = conn.cursor()
         
         cursor.execute('SELECT * FROM participants WHERE roulette_id = ? AND user_id = ?', (roulette_id, user_id))
         if cursor.fetchone():
-            await query.answer("أنت مشترك بالفعل في هذا الروليت!", show_alert=True)
+            query.answer("أنت مشترك بالفعل في هذا الروليت!", show_alert=True)
             conn.close()
             return
         
@@ -418,18 +420,18 @@ async def join_roulette(query, context):
         conn.commit()
         conn.close()
         
-        await query.answer(f"تم انضمامك للروليت! ({current_participants}/{max_participants})", show_alert=True)
+        query.answer(f"تم انضمامك للروليت! ({current_participants}/{max_participants})", show_alert=True)
         
     except Exception as e:
-        logging.error(f"Error in join_roulette: {e}")
-        await query.answer("حدث خطأ أثناء الانضمام للروليت", show_alert=True)
+        logger.error(f"Error in join_roulette: {e}")
+        query.answer("حدث خطأ أثناء الانضمام للروليت", show_alert=True)
 
-async def stop_roulette(query, context):
+def stop_roulette(query, context):
     try:
         roulette_id = int(query.data.split('_')[2])
         user_id = query.from_user.id
         
-        conn = sqlite3.connect('roulette.db')
+        conn = sqlite3.connect('roulette.db', check_same_thread=False)
         cursor = conn.cursor()
         
         cursor.execute('SELECT creator_id FROM roulettes WHERE id = ?', (roulette_id,))
@@ -438,20 +440,20 @@ async def stop_roulette(query, context):
         if result and result[0] == user_id:
             cursor.execute('UPDATE roulettes SET status = "stopped" WHERE id = ?', (roulette_id,))
             conn.commit()
-            await query.answer("تم إيقاف الروليت بنجاح!", show_alert=True)
+            query.answer("تم إيقاف الروليت بنجاح!", show_alert=True)
         else:
-            await query.answer("只有创建者可以停止这个轮盘!", show_alert=True)
+            query.answer("只有创建者可以停止这个轮盘!", show_alert=True)
         
         conn.close()
         
     except Exception as e:
-        logging.error(f"Error in stop_roulette: {e}")
-        await query.answer("حدث خطأ أثناء إيقاف الروليت", show_alert=True)
+        logger.error(f"Error in stop_roulette: {e}")
+        query.answer("حدث خطأ أثناء إيقاف الروليت", show_alert=True)
 
-async def main_menu_callback(query, context):
+def main_menu_callback(query, context):
     user_id = query.from_user.id
     
-    conn = sqlite3.connect('roulette.db')
+    conn = sqlite3.connect('roulette.db', check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute('SELECT balance FROM users WHERE user_id = ?', (user_id,))
     result = cursor.fetchone()
@@ -467,17 +469,17 @@ async def main_menu_callback(query, context):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await query.edit_message_text(
-        f"🎰 *مرحباً بك في روليت MS* \n\n💰 رصيدك: {balance} نقطة\nاختر من القائمة:",
+    query.edit_message_text(
+        f"🎰 *مرحباً بك في روليت MS* 🎰\n\n💰 رصيدك: {balance} نقطة\nاختر من القائمة:",
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
 
-async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def menu_command(update: Update, context: CallbackContext):
     user = update.effective_user
     user_id = user.id
     
-    conn = sqlite3.connect('roulette.db')
+    conn = sqlite3.connect('roulette.db', check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute('SELECT balance FROM users WHERE user_id = ?', (user_id,))
     result = cursor.fetchone()
@@ -493,8 +495,8 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await update.message.reply_text(
-        f"🎰 *مرحباً بك في روليت MS* \n\n💰 رصيدك: {balance} نقطة\nاختر من القائمة:",
+    update.message.reply_text(
+        f"🎰 *مرحباً بك في روليت MS* 🎰\n\n💰 رصيدك: {balance} نقطة\nاختر من القائمة:",
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
@@ -502,19 +504,22 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     init_db()
     
-    application = Application.builder().token(BOT_TOKEN).build()
+    updater = Updater(BOT_TOKEN, use_context=True)
+    dp = updater.dispatcher
     
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("menu", menu_command))
-    application.add_handler(CallbackQueryHandler(handle_callback))
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("menu", menu_command))
+    dp.add_handler(CallbackQueryHandler(handle_callback))
     
-    port = int(os.environ.get('PORT', 8443))
-    application.run_webhook(
+    # استخدم Polling بدلاً من Webhook للبساطة
+    PORT = int(os.environ.get('PORT', 8443))
+    updater.start_webhook(
         listen="0.0.0.0",
-        port=port,
+        port=PORT,
         url_path=BOT_TOKEN,
         webhook_url=f"https://your-app-name.railway.app/{BOT_TOKEN}"
     )
+    updater.idle()
 
 if __name__ == '__main__':
     main()

@@ -1,2 +1,1 @@
-main: python main_bot.py
-admin: python admin_bot.py
+web: python bot.py

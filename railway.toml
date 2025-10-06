@@ -5,11 +5,6 @@ build.command = "echo 'Building...'"
 builder = "nixpacks"
 
 [[services]]
-name = "main-bot"
+name = "web"
 source_path = "."
-run = "python main_bot.py"
-
-[[services]]
-name = "admin-bot" 
-source_path = "."
-run = "python admin_bot.py"
+run = "python bot.py"

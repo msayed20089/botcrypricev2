@@ -5,10 +5,18 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 # إعدادات البوت
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8399150202:AAEvr37r05xzbjhwinnGZQIWAuoylpsNflg")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 ADMIN_ID = int(os.getenv("ADMIN_ID", "6096879850"))
 BOT_USERNAME = "lllllllofdkokbot"
 
+# تحقق من التوكن
+if not BOT_TOKEN:
+    print("❌ خطأ: BOT_TOKEN غير موجود في main_bot!")
+    exit(1)
+
+print(f"✅ البوت الرئيسي يعمل بالتوكن: {BOT_TOKEN[:10]}...")
+
+# باقي الكود...
 # إعداد التسجيل
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',

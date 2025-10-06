@@ -668,16 +668,16 @@ async def start_roulette(query, context):
         
         await query.answer("تم بدء السحب واختيار الفائزين!", show_alert=True)
             
-    except Exception as e:
-        logger.error(f"Error in start_roulette: {e}")
-        await query.
-        async def view_participants(query, context):
+   except Exception as e:
+    logger.error(f"Error in start_roulette: {e}")
+    await query.answer("حدث خطأ أثناء بدء السحب", show_alert=True)
+
+async def view_participants(query, context):
     try:
         roulette_id = int(query.data.split('_')[1])
         
         conn = sqlite3.connect('ms_roulette.db', check_same_thread=False)
         cursor = conn.cursor()
-        
         cursor.execute('SELECT user_name FROM participants WHERE roulette_id = ?', (roulette_id,))
         participants = cursor.fetchall()
         

@@ -483,7 +483,7 @@ async def stop_roulette(query, context):
                     text=roulette_text
                 )
             except Exception as e:
-                logger.error(f"Error updating stopped message: {e")
+                logger.error(f"Error updating stopped message: {e}")
             
             await query.answer("تم إيقاف الروليت بنجاح!", show_alert=True)
         else:

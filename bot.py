@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # قاعدة البيانات
 def init_db():
-    conn = sqlite3.connect('panda_roulette.db', check_same_thread=False)
+    conn = sqlite3.connect('ms_roulette.db', check_same_thread=False)
     cursor = conn.cursor()
     
     cursor.execute('''
@@ -27,7 +27,7 @@ def init_db():
             user_id INTEGER PRIMARY KEY,
             username TEXT,
             first_name TEXT,
-            balance INTEGER DEFAULT 5,
+            balance INTEGER DEFAULT 3,
             invited_by INTEGER DEFAULT 0,
             total_invites INTEGER DEFAULT 0,
             joined_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -42,7 +42,7 @@ def init_db():
             message_id INTEGER,
             max_participants INTEGER DEFAULT 10,
             current_participants INTEGER DEFAULT 0,
-            status TEXT DEFAULT 'active',
+            status TEXT DEFAULT 'waiting',
             winner_id INTEGER DEFAULT NULL,
             prize INTEGER DEFAULT 0,
             created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -54,6 +54,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             roulette_id INTEGER,
             user_id INTEGER,
+            user_name TEXT,
             joined_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -69,12 +70,27 @@ def init_db():
         )
     ''')
     
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS forced_channels (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            channel_username TEXT,
+            channel_id TEXT,
+            cost INTEGER DEFAULT 0,
+            is_active BOOLEAN DEFAULT TRUE,
+            added_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # إضافة القنوات الإجبارية الافتراضية
+    cursor.execute('INSERT OR IGNORE INTO forced_channels (channel_username, channel_id, cost) VALUES (?, ?, ?)', 
+                  ("zforexms", "@zforexms", 5))
+    
     conn.commit()
     conn.close()
 
 # دوال المساعدة
 def get_user(user_id):
-    conn = sqlite3.connect('panda_roulette.db', check_same_thread=False)
+    conn = sqlite3.connect('ms_roulette.db', check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
     user = cursor.fetchone()
@@ -82,32 +98,32 @@ def get_user(user_id):
     return user
 
 def create_user(user_id, username, first_name, invited_by=0):
-    conn = sqlite3.connect('panda_roulette.db', check_same_thread=False)
+    conn = sqlite3.connect('ms_roulette.db', check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute('''
         INSERT OR REPLACE INTO users (user_id, username, first_name, invited_by, balance) 
-        VALUES (?, ?, ?, ?, 5)
+        VALUES (?, ?, ?, ?, 3)
     ''', (user_id, username, first_name, invited_by))
     conn.commit()
     conn.close()
 
 def update_balance(user_id, amount):
-    conn = sqlite3.connect('panda_roulette.db', check_same_thread=False)
+    conn = sqlite3.connect('ms_roulette.db', check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute('UPDATE users SET balance = balance + ? WHERE user_id = ?', (amount, user_id))
     conn.commit()
     conn.close()
 
 def get_balance(user_id):
-    conn = sqlite3.connect('panda_roulette.db', check_same_thread=False)
+    conn = sqlite3.connect('ms_roulette.db', check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute('SELECT balance FROM users WHERE user_id = ?', (user_id,))
     result = cursor.fetchone()
     conn.close()
-    return result[0] if result else 5
+    return result[0] if result else 3
 
 def get_user_channel(user_id):
-    conn = sqlite3.connect('panda_roulette.db', check_same_thread=False)
+    conn = sqlite3.connect('ms_roulette.db', check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute('SELECT channel_username, channel_id FROM user_channels WHERE user_id = ? AND is_approved = TRUE', (user_id,))
     channel = cursor.fetchone()
@@ -115,7 +131,7 @@ def get_user_channel(user_id):
     return channel
 
 def add_user_channel(user_id, channel_username, channel_id):
-    conn = sqlite3.connect('panda_roulette.db', check_same_thread=False)
+    conn = sqlite3.connect('ms_roulette.db', check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute('''
         INSERT OR REPLACE INTO user_channels (user_id, channel_username, channel_id, is_approved) 
@@ -123,6 +139,36 @@ def add_user_channel(user_id, channel_username, channel_id):
     ''', (user_id, channel_username, channel_id))
     conn.commit()
     conn.close()
+
+def get_forced_channels():
+    conn = sqlite3.connect('ms_roulette.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute('SELECT channel_username, channel_id, cost FROM forced_channels WHERE is_active = TRUE')
+    channels = cursor.fetchall()
+    conn.close()
+    return channels
+
+def add_forced_channel(channel_username, channel_id, cost=0):
+    conn = sqlite3.connect('ms_roulette.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute('INSERT OR REPLACE INTO forced_channels (channel_username, channel_id, cost) VALUES (?, ?, ?)', 
+                  (channel_username, channel_id, cost))
+    conn.commit()
+    conn.close()
+
+async def check_channel_subscription(user_id, channel_id, context):
+    try:
+        member = await context.bot.get_chat_member(chat_id=channel_id, user_id=user_id)
+        return member.status in ['member', 'administrator', 'creator']
+    except:
+        return False
+
+async def check_bot_admin(channel_id, context):
+    try:
+        bot_member = await context.bot.get_chat_member(chat_id=channel_id, user_id=context.bot.id)
+        return bot_member.status in ['administrator', 'creator']
+    except:
+        return False
 
 # الأوامر الرئيسية
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -137,16 +183,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             invited_by = int(args[0].split('_')[1])
             update_balance(invited_by, 1)
             
-            conn = sqlite3.connect('panda_roulette.db', check_same_thread=False)
+            conn = sqlite3.connect('ms_roulette.db', check_same_thread=False)
             cursor = conn.cursor()
             cursor.execute('UPDATE users SET total_invites = total_invites + 1 WHERE user_id = ?', (invited_by,))
-            cursor.execute('INSERT INTO invitations (inviter_id, invited_id) VALUES (?, ?)', (invited_by, user_id))
             conn.commit()
             conn.close()
         except Exception as e:
             logger.error(f"Error in referral: {e}")
 
-    # إنشاء/تحديث المستخدم
     if not get_user(user_id):
         create_user(user_id, user.username, user.first_name, invited_by)
 
@@ -162,22 +206,29 @@ async def show_main_menu(update, user_id, message_text=None):
     
     if message_text is None:
         user = update.effective_user if hasattr(update, 'effective_user') else update.callback_query.from_user
-        message_text = f"شرفنى يا {user.first_name} في روليت Panda افضل بوت عمل سحوبات في التليجرام!\n\nالإيدي بتاعك: {user_id}\n\nاختر من القائمة التالية:"
-    
+        message_text = f"""🎰 *مرحباً بك في روليت MS* 
+
+⚡ أفضل بوت سحوبات على التليجرام
+
+🆔 الإيدي: {user_id}
+💰 رصيدك: {balance} نقطة
+
+📊 أنشئ روليت مجاني أو مدفوع في قناتك!"""
+
     keyboard = [
-        [InlineKeyboardButton("🎰 إنشاء روليت سريع", callback_data="create_roulette")],
-        [InlineKeyboardButton(f"⚙️ إعدادات القناة ({channel_status})", callback_data="channel_settings")],
-        [InlineKeyboardButton(f"💰 رصيدك: {balance} نقطة", callback_data="balance")],
-        [InlineKeyboardButton("🔔 ذكرني إذا فُرت", callback_data="remind_me")],
-        [InlineKeyboardButton("📞 الدعم الفني", callback_data="support")],
-        [InlineKeyboardButton("📖 تعليمات الاستخدام", callback_data="instructions")]
+        [InlineKeyboardButton("🎰 إنشاء روليت مجاني", callback_data="create_free_roulette")],
+        [InlineKeyboardButton("💎 إنشاء روليت مدفوع", callback_data="create_paid_roulette")],
+        [InlineKeyboardButton(f"📢 قناتك ({channel_status})", callback_data="channel_settings")],
+        [InlineKeyboardButton("📊 إحصائياتي", callback_data="my_stats")],
+        [InlineKeyboardButton("📤 رابط الدعوة", callback_data="invite_link")],
+        [InlineKeyboardButton("⚙️ الإعدادات", callback_data="settings")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     if hasattr(update, 'callback_query') and update.callback_query:
-        await update.callback_query.edit_message_text(message_text, reply_markup=reply_markup)
+        await update.callback_query.edit_message_text(message_text, reply_markup=reply_markup, parse_mode='Markdown')
     else:
-        await update.message.reply_text(message_text, reply_markup=reply_markup)
+        await update.message.reply_text(message_text, reply_markup=reply_markup, parse_mode='Markdown')
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -186,143 +237,194 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     user_id = query.from_user.id
     
-    if data == "create_roulette":
-        await create_roulette(query, context)
+    if data == "create_free_roulette":
+        await create_free_roulette(query, context)
+    elif data == "create_paid_roulette":
+        await create_paid_roulette(query, context)
     elif data == "channel_settings":
         await channel_settings(query, context)
-    elif data == "balance":
-        await show_balance(query, context)
-    elif data == "remind_me":
-        await remind_me(query, context)
-    elif data == "support":
-        await support(query, context)
-    elif data == "instructions":
-        await instructions(query, context)
+    elif data == "my_stats":
+        await my_stats(query, context)
+    elif data == "invite_link":
+        await invite_link(query, context)
+    elif data == "settings":
+        await settings_menu(query, context)
     elif data.startswith("join_"):
         await join_roulette(query, context)
+    elif data.startswith("start_"):
+        await start_roulette(query, context)
     elif data.startswith("stop_"):
         await stop_roulette(query, context)
+    elif data.startswith("view_"):
+        await view_participants(query, context)
     elif data == "main_menu":
         await show_main_menu(update, user_id)
     elif data == "add_channel":
         await add_channel_prompt(query, context)
+    elif data == "select_forced_channel":
+        await select_forced_channel(query, context)
 
-async def create_roulette(query, context):
+async def create_free_roulette(query, context):
     user_id = query.from_user.id
-    balance = get_balance(user_id)
-    
-    if balance < 1:
-        await query.edit_message_text(
-            f"❌ رصيدك غير كافي!\n\n💰 رصيدك الحالي: {balance} نقطة\n💡 تحتاج إلى نقطة واحدة لإنشاء روليت",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
-            ])
-        )
-        return
-    
     user_channel = get_user_channel(user_id)
+    
     if not user_channel:
         await query.edit_message_text(
-            "❌ يجب عليك ضبط قناة أولاً!",
+            "❌ يجب عليك ضبط قناة أولاً!\n\n📢 أضف قناتك واضف البوت كأدمن فيها.",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("⚙️ ضبط القناة", callback_data="channel_settings")],
+                [InlineKeyboardButton("📢 ضبط القناة", callback_data="channel_settings")],
                 [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
             ])
         )
         return
     
-    # خصم النقطة وإنشاء الروليت
-    update_balance(user_id, -1)
+    # التحقق من أن البوت أدمن في القناة
+    is_bot_admin = await check_bot_admin(user_channel[1], context)
+    if not is_bot_admin:
+        await query.edit_message_text(
+            f"❌ البوت ليس أدمن في القناة!\n\n📢 قناتك: @{user_channel[0]}\n\n⚠️ أضف البوت كأدمن في القناة أولاً.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔄 تحقق مرة أخرى", callback_data="create_free_roulette")],
+                [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
+            ])
+        )
+        return
     
-    conn = sqlite3.connect('panda_roulette.db', check_same_thread=False)
+    # إنشاء الروليت المجاني
+    conn = sqlite3.connect('ms_roulette.db', check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute('INSERT INTO roulettes (creator_id, channel_id, prize) VALUES (?, ?, ?)', (user_id, user_channel[1], 10))
+    cursor.execute('INSERT INTO roulettes (creator_id, channel_id, status) VALUES (?, ?, "waiting")', (user_id, user_channel[1]))
     roulette_id = cursor.lastrowid
-    
-    cursor.execute('INSERT INTO participants (roulette_id, user_id) VALUES (?, ?)', (roulette_id, user_id))
-    cursor.execute('UPDATE roulettes SET current_participants = 1 WHERE id = ?', (roulette_id,))
-    
     conn.commit()
     conn.close()
     
     # إرسال الروليت إلى القناة
     try:
-        roulette_text = """🎰 روليت سريع لـ 10 أشخاص!
+        roulette_text = f"""🎰 *روليت سريع - مجاني*
 
-المشاركة سنغلق بعد اكتمال العدد
+👤 المنشئ: {query.from_user.first_name}
+🔢 العدد المستهدف: 10 أشخاص
 
-المشاركون: 1/10
+📊 المشاركون: 0/10
+⏳ في انتظار بدء الروليت...
 
-روليت هام Panda"""
+⚡ روليت MS"""
 
         keyboard = [
-            [InlineKeyboardButton("🎰 انضم للروليت", callback_data=f"join_{roulette_id}")],
-            [InlineKeyboardButton("⏹ إيقاف الروليت", callback_data=f"stop_{roulette_id}")]
+            [InlineKeyboardButton("🎯 انضم للروليت", callback_data=f"join_{roulette_id}")],
+            [InlineKeyboardButton("👀 مشاهدة المشاركين", callback_data=f"view_{roulette_id}")],
+            [InlineKeyboardButton("🚀 بدء الروليت", callback_data=f"start_{roulette_id}")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message = await context.bot.send_message(
             chat_id=user_channel[1],
             text=roulette_text,
-            reply_markup=reply_markup
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
         )
         
-        conn = sqlite3.connect('panda_roulette.db', check_same_thread=False)
+        conn = sqlite3.connect('ms_roulette.db', check_same_thread=False)
         cursor = conn.cursor()
         cursor.execute('UPDATE roulettes SET message_id = ? WHERE id = ?', (message.message_id, roulette_id))
         conn.commit()
         conn.close()
         
         await query.edit_message_text(
-            f"✅ تم إنشاء الروليت بنجاح!\n\n"
-            f"🎯 تم نشر الروليت في قناتك: @{user_channel[0]}\n"
-            f"💰 تم خصم 1 نقطة\n"
-            f"💎 رصيدك الجديد: {balance - 1} نقطة",
+            f"✅ *تم إنشاء الروليت المجاني بنجاح!*\n\n"
+            f"📢 القناة: @{user_channel[0]}\n"
+            f"🎯 يمكنك الآن بدء الروليت عندما يكتمل العدد\n\n"
+            f"📤 شارك الروليت مع أصدقائك!",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
-            ])
+            ]),
+            parse_mode='Markdown'
         )
         
     except Exception as e:
         logger.error(f"Error sending to channel: {e}")
-        update_balance(user_id, 1)
         await query.edit_message_text(
-            f"❌ فشل إنشاء الروليت!\n\n"
-            f"⚠️ تأكد من إضافة البوت كأدمن في القناة",
+            f"❌ فشل إنشاء الروليت!\n\nتأكد من صلاحيات البوت في القناة.",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("⚙️ ضبط القناة", callback_data="channel_settings")],
+                [InlineKeyboardButton("📢 ضبط القناة", callback_data="channel_settings")],
                 [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
             ])
         )
+
+async def create_paid_roulette(query, context):
+    user_id = query.from_user.id
+    balance = get_balance(user_id)
+    
+    forced_channels = get_forced_channels()
+    if not forced_channels:
+        await query.edit_message_text(
+            "❌ لا توجد قنوات مدفوعة متاحة حالياً!",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
+            ])
+        )
+        return
+    
+    keyboard = []
+    for channel in forced_channels:
+        channel_username, channel_id, cost = channel
+        if balance >= cost:
+            keyboard.append([InlineKeyboardButton(f"📢 @{channel_username} - {cost} نقطة", callback_data=f"paid_{channel_id}")])
+        else:
+            keyboard.append([InlineKeyboardButton(f"❌ @{channel_username} - {cost} نقطة (رصيد غير كافي)", callback_data="insufficient_balance")])
+    
+    keyboard.append([InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")])
+    
+    await query.edit_message_text(
+        f"💎 *إنشاء روليت مدفوع*\n\n💰 رصيدك الحالي: {balance} نقطة\n\nاختر القناة المطلوبة:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+
+async def select_forced_channel(query, context):
+    user_id = query.from_user.id
+    forced_channels = get_forced_channels()
+    
+    keyboard = []
+    for channel in forced_channels:
+        channel_username, channel_id, cost = channel
+        keyboard.append([InlineKeyboardButton(f"📢 @{channel_username}", callback_data=f"forced_{channel_id}")])
+    
+    keyboard.append([InlineKeyboardButton("🔙 رجوع", callback_data="channel_settings")])
+    
+    await query.edit_message_text(
+        "📢 *اختر قناة الاشتراك الإجباري:*\n\nسيتم إضافة هذه القناة كاشتراك إجباري للروليت.",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
 
 async def join_roulette(query, context):
     try:
         roulette_id = int(query.data.split('_')[1])
         user_id = query.from_user.id
+        user_name = query.from_user.first_name
         
-        conn = sqlite3.connect('panda_roulette.db', check_same_thread=False)
+        conn = sqlite3.connect('ms_roulette.db', check_same_thread=False)
         cursor = conn.cursor()
         
+        # التحقق من المشاركة السابقة
         cursor.execute('SELECT * FROM participants WHERE roulette_id = ? AND user_id = ?', (roulette_id, user_id))
         if cursor.fetchone():
-            await query.answer("أنت مشترك بالفعل في هذا الروليت!", show_alert=True)
+            await query.answer("أنت مشترك بالفعل في هذا الروليت! ✅", show_alert=True)
             conn.close()
             return
         
+        # التحقق من حالة الروليت
         cursor.execute('SELECT status, current_participants, max_participants, channel_id, message_id FROM roulettes WHERE id = ?', (roulette_id,))
         roulette = cursor.fetchone()
         
-        if not roulette or roulette[0] != 'active':
-            await query.answer("هذا الروليت غير متاح!", show_alert=True)
-            conn.close()
-            return
-            
-        if roulette[1] >= roulette[2]:
-            await query.answer("الروليت مكتمل!", show_alert=True)
+        if not roulette or roulette[0] != 'waiting':
+            await query.answer("الروليت غير متاح للانضمام! ❌", show_alert=True)
             conn.close()
             return
         
-        cursor.execute('INSERT INTO participants (roulette_id, user_id) VALUES (?, ?)', (roulette_id, user_id))
+        # إضافة المشارك
+        cursor.execute('INSERT INTO participants (roulette_id, user_id, user_name) VALUES (?, ?, ?)', (roulette_id, user_id, user_name))
         cursor.execute('UPDATE roulettes SET current_participants = current_participants + 1 WHERE id = ?', (roulette_id,))
         
         cursor.execute('SELECT current_participants FROM roulettes WHERE id = ?', (roulette_id,))
@@ -332,17 +434,24 @@ async def join_roulette(query, context):
         
         # تحديث الرسالة في القناة
         try:
-            roulette_text = f"""🎰 روليت سريع لـ 10 أشخاص!
+            cursor.execute('SELECT creator_id FROM roulettes WHERE id = ?', (roulette_id,))
+            creator_id = cursor.fetchone()[0]
+            creator = await context.bot.get_chat(creator_id)
+            
+            roulette_text = f"""🎰 *روليت سريع - مجاني*
 
-المشاركة سنغلق بعد اكتمال العدد
+👤 المنشئ: {creator.first_name}
+🔢 العدد المستهدف: 10 أشخاص
 
-المشاركون: {current}/10
+📊 المشاركون: {current}/10
+⏳ في انتظار بدء الروليت...
 
-روليت هام Panda"""
+⚡ روليت MS"""
 
             keyboard = [
-                [InlineKeyboardButton("🎰 انضم للروليت", callback_data=f"join_{roulette_id}")],
-                [InlineKeyboardButton("⏹ إيقاف الروليت", callback_data=f"stop_{roulette_id}")]
+                [InlineKeyboardButton("🎯 انضم للروليت", callback_data=f"join_{roulette_id}")],
+                [InlineKeyboardButton("👀 مشاهدة المشاركين", callback_data=f"view_{roulette_id}")],
+                [InlineKeyboardButton("🚀 بدء الروليت", callback_data=f"start_{roulette_id}")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
@@ -350,135 +459,151 @@ async def join_roulette(query, context):
                 chat_id=roulette[3],
                 message_id=roulette[4],
                 text=roulette_text,
-                reply_markup=reply_markup
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
             )
         except Exception as e:
             logger.error(f"Error updating channel message: {e}")
         
         conn.close()
         
-        await query.answer(f"تم انضمامك للروليت! ({current}/10)", show_alert=True)
-        
-        if current >= 10:
-            await select_winner(roulette_id, context)
+        await query.answer(f"تم انضمامك للروليت! 🎯 ({current}/10)", show_alert=True)
             
     except Exception as e:
         logger.error(f"Error in join_roulette: {e}")
-        await query.answer("حدث خطأ أثناء الانضمام", show_alert=True)
+        await query.answer("حدث خطأ أثناء الانضمام ⚠️", show_alert=True)
 
-async def select_winner(roulette_id, context):
-    conn = sqlite3.connect('panda_roulette.db', check_same_thread=False)
-    cursor = conn.cursor()
-    
-    cursor.execute('SELECT user_id FROM participants WHERE roulette_id = ?', (roulette_id,))
-    participants = cursor.fetchall()
-    
-    if participants:
-        winner_id = random.choice(participants)[0]
-        
-        cursor.execute('UPDATE roulettes SET winner_id = ?, status = "completed" WHERE id = ?', (winner_id, roulette_id))
-        update_balance(winner_id, 10)
-        
-        cursor.execute('SELECT channel_id, message_id FROM roulettes WHERE id = ?', (roulette_id,))
-        roulette_info = cursor.fetchone()
-        
-        conn.commit()
-        
-        try:
-            winner_user = await context.bot.get_chat(winner_id)
-            winner_text = f"🎉 تم اختيار الفائز: {winner_user.first_name}"
-            
-            roulette_text = f"""🎰 روليت سريع لـ 10 أشخاص!
-
-{winner_text}
-
-المشاركون: 10/10 ✅
-
-روليت هام Panda - مكتمل"""
-
-            await context.bot.edit_message_text(
-                chat_id=roulette_info[0],
-                message_id=roulette_info[1],
-                text=roulette_text
-            )
-        except Exception as e:
-            logger.error(f"Error updating winner message: {e}")
-        
-        try:
-            await context.bot.send_message(
-                winner_id,
-                f"🎉 مبروك! فزت في الروليت #{roulette_id}\n\n💰 ربحت 10 نقاط!"
-            )
-        except:
-            pass
-            
-    conn.close()
-
-async def stop_roulette(query, context):
+async def start_roulette(query, context):
     try:
         roulette_id = int(query.data.split('_')[1])
         user_id = query.from_user.id
         
-        conn = sqlite3.connect('panda_roulette.db', check_same_thread=False)
+        conn = sqlite3.connect('ms_roulette.db', check_same_thread=False)
         cursor = conn.cursor()
         
-        cursor.execute('SELECT creator_id, channel_id, message_id FROM roulettes WHERE id = ?', (roulette_id,))
+        cursor.execute('SELECT creator_id, current_participants, channel_id, message_id FROM roulettes WHERE id = ?', (roulette_id,))
         roulette = cursor.fetchone()
         
-        if user_id == roulette[0]:
-            cursor.execute('UPDATE roulettes SET status = "stopped" WHERE id = ?', (roulette_id,))
-            conn.commit()
+        if not roulette or user_id != roulette[0]:
+            await query.answer("فقط منشئ الروليت يمكنه بدء الروليت! ❌", show_alert=True)
+            conn.close()
+            return
+        
+        if roulette[1] < 2:
+            await query.answer("يجب أن يكون هناك مشاركين على الأقل! 👥", show_alert=True)
+            conn.close()
+            return
+        
+        # بدء الروليت واختيار الفائز
+        cursor.execute('SELECT user_id, user_name FROM participants WHERE roulette_id = ?', (roulette_id,))
+        participants = cursor.fetchall()
+        
+        winner_id, winner_name = random.choice(participants)
+        
+        cursor.execute('UPDATE roulettes SET status = "completed", winner_id = ? WHERE id = ?', (winner_id, roulette_id))
+        update_balance(winner_id, 10)  # مكافأة الفائز
+        
+        conn.commit()
+        
+        # تحديث الرسالة في القناة
+        try:
+            winner_text = f"🎉 *الفائز: {winner_name}*"
             
-            try:
-                roulette_text = """🎰 روليت سريع لـ 10 أشخاص!
-
-⏹ تم إيقاف الروليت من قبل المنشئ
-
-روليت هام Panda - متوقف"""
-
-                await context.bot.edit_message_text(
-                    chat_id=roulette[1],
-                    message_id=roulette[2],
-                    text=roulette_text
-                )
-            except Exception as e:
-                logger.error(f"Error updating stopped message: {e}")
+            participants_text = "👥 *المشاركون:*\n"
+            for i, (pid, pname) in enumerate(participants, 1):
+                participants_text += f"{i}. {pname}\n"
             
-            await query.answer("تم إيقاف الروليت بنجاح!", show_alert=True)
-        else:
-            await query.answer("فقط منشئ الروليت يمكنه إيقافه!", show_alert=True)
+            roulette_text = f"""🎰 *روليت سريع - مكتمل*
+
+{winner_text}
+
+{participants_text}
+
+🎁 الجائزة: 10 نقاط
+✅ الروليت مكتمل
+
+⚡ روليت MS"""
+
+            await context.bot.edit_message_text(
+                chat_id=roulette[2],
+                message_id=roulette[3],
+                text=roulette_text,
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            logger.error(f"Error updating winner message: {e}")
+        
+        # إرسال رسالة للفائز
+        try:
+            await context.bot.send_message(
+                winner_id,
+                f"🎉 *مبروك! فزت في الروليت* #{roulette_id}\n\n💰 ربحت 10 نقاط!\n\nرصيدك الجديد: {get_balance(winner_id)} نقطة 🎁",
+                parse_mode='Markdown'
+            )
+        except:
+            pass
         
         conn.close()
         
+        await query.answer("تم بدء الروليت واختيار الفائز! 🎉", show_alert=True)
+            
     except Exception as e:
-        logger.error(f"Error in stop_roulette: {e}")
-        await query.answer("حدث خطأ أثناء الإيقاف", show_alert=True)
+        logger.error(f"Error in start_roulette: {e}")
+        await query.answer("حدث خطأ أثناء بدء الروليت ⚠️", show_alert=True)
+
+async def view_participants(query, context):
+    try:
+        roulette_id = int(query.data.split('_')[1])
+        
+        conn = sqlite3.connect('ms_roulette.db', check_same_thread=False)
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT user_name FROM participants WHERE roulette_id = ?', (roulette_id,))
+        participants = cursor.fetchall()
+        
+        conn.close()
+        
+        if participants:
+            participants_text = "👥 *المشاركون في الروليت:*\n\n"
+            for i, (name,) in enumerate(participants, 1):
+                participants_text += f"{i}. {name}\n"
+            
+            await query.answer(participants_text, show_alert=True)
+        else:
+            await query.answer("لا يوجد مشاركين بعد! ❌", show_alert=True)
+            
+    except Exception as e:
+        logger.error(f"Error in view_participants: {e}")
+        await query.answer("حدث خطأ ⚠️", show_alert=True)
 
 async def channel_settings(query, context):
     user_id = query.from_user.id
     user_channel = get_user_channel(user_id)
     
     if user_channel:
-        text = f"⚙️ إعدادات القناة:\n\nالقناة الحالية: @{user_channel[0]}\n\nيمكنك تغيير القناة:"
+        text = f"📢 *إعدادات القناة*\n\nالقناة الحالية: @{user_channel[0]}\n\nيمكنك تغيير القناة أو إضافة قناة جديدة:"
     else:
-        text = "⚙️ إعدادات القناة:\n\nلم تقم بإضافة قناة بعد.\n\nلإضافة قناة، أرسل معرف القناة:"
+        text = "📢 *إعدادات القناة*\n\nلم تقم بإضافة قناة بعد.\n\nلإنشاء روليت، تحتاج إلى إضافة قناة واضافة البوت كأدمن فيها."
     
     keyboard = [
         [InlineKeyboardButton("➕ إضافة قناة", callback_data="add_channel")],
+        [InlineKeyboardButton("📢 قنوات الاشتراك الإجباري", callback_data="select_forced_channel")],
         [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
     ]
     
     await query.edit_message_text(
-        text + "\n\n⚠️ تأكد من إضافة البوت كأدمن في القناة",
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        text + "\n\n⚠️ *تأكد من إضافة البوت كأدمن في القناة*",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
     )
 
 async def add_channel_prompt(query, context):
     await query.edit_message_text(
-        "📥 أرسل معرف القناة:\n\nمثال: @channel_username\n\nثم اضف البوت كأدمن في القناة.",
+        "📥 *أرسل معرف القناة:*\n\nمثال: @channel_username\n\nثم اضف البوت كأدمن في القناة مع صلاحية إرسال رسائل.",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("🔙 رجوع", callback_data="channel_settings")]
-        ])
+        ]),
+        parse_mode='Markdown'
     )
 
 async def handle_channel_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -499,6 +624,7 @@ async def handle_channel_message(update: Update, context: ContextTypes.DEFAULT_T
     
     if channel_username:
         try:
+            # اختبار إرسال رسالة إلى القناة
             test_message = await context.bot.send_message(
                 chat_id=channel_id,
                 text="🔧 اختبار اتصال البوت بالقناة..."
@@ -509,71 +635,145 @@ async def handle_channel_message(update: Update, context: ContextTypes.DEFAULT_T
             add_user_channel(user_id, channel_username, channel_id)
             
             await update.message.reply_text(
-                f"✅ تم إضافة القناة بنجاح!\n\n📢 القناة: @{channel_username}",
+                f"✅ *تم إضافة القناة بنجاح!*\n\n📢 القناة: @{channel_username}\n\nيمكنك الآن إنشاء روليتات في قناتك. 🎰",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🎰 إنشاء روليت", callback_data="create_roulette")],
+                    [InlineKeyboardButton("🎰 إنشاء روليت مجاني", callback_data="create_free_roulette")],
                     [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
-                ])
+                ]),
+                parse_mode='Markdown'
             )
             
         except Exception as e:
             logger.error(f"Error testing channel: {e}")
             await update.message.reply_text(
-                f"❌ فشل إضافة القناة!\n\nتأكد من إضافة البوت كأدمن في القناة",
+                f"❌ *فشل إضافة القناة!*\n\nتأكد من:\n• إضافة البوت كأدمن في القناة\n• صلاحية إرسال رسائل\n• أن المعرف صحيح\n\nالقناة: {channel_id}",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("🔄 حاول مرة أخرى", callback_data="add_channel")],
                     [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
-                ])
+                ]),
+                parse_mode='Markdown'
             )
     else:
         await update.message.reply_text(
-            "❌ صيغة غير صحيحة!\n\nأرسل معرف القناة مثل: @channel_username",
+            "❌ *صيغة غير صحيحة!*\n\nأرسل معرف القناة مثل:\n@channel_username",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔄 حاول مرة أخرى", callback_data="add_channel")],
                 [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
-            ])
+            ]),
+            parse_mode='Markdown'
         )
 
-async def show_balance(query, context):
+async def my_stats(query, context):
     user_id = query.from_user.id
     balance = get_balance(user_id)
     
+    conn = sqlite3.connect('ms_roulette.db', check_same_thread=False)
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT total_invites FROM users WHERE user_id = ?', (user_id,))
+    invites = cursor.fetchone()[0]
+    
+    cursor.execute('SELECT COUNT(*) FROM roulettes WHERE creator_id = ?', (user_id,))
+    created = cursor.fetchone()[0]
+    
+    cursor.execute('SELECT COUNT(*) FROM participants WHERE user_id = ?', (user_id,))
+    joined = cursor.fetchone()[0]
+    
+    conn.close()
+    
+    stats_text = f"""📊 *إحصائياتك الشخصية*
+
+💰 الرصيد: {balance} نقطة
+📤 الدعوات: {invites} دعوة
+🎰 الروليتات المنشأة: {created}
+🎯 الروليتات المشتركة: {joined}
+
+📈 استمر في الدعوة لكسب المزيد! 🚀"""
+    
     await query.edit_message_text(
-        f"💰 رصيدك الحالي: {balance} نقطة",
+        stats_text,
         reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("📤 رابط الدعوة", callback_data="invite_link")],
             [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
-        ])
+        ]),
+        parse_mode='Markdown'
     )
 
-async def remind_me(query, context):
-    await query.edit_message_text(
-        "🔔 سيتم إشعارك عندما يتوفر روليت جديد!",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
-        ])
-    )
+async def invite_link(query, context):
+    user_id = query.from_user.id
+    invite_link = f"https://t.me/lllllllofdkokbot?start=ref_{user_id}"
+    
+    conn = sqlite3.connect('ms_roulette.db', check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute('SELECT total_invites FROM users WHERE user_id = ?', (user_id,))
+    invites = cursor.fetchone()[0]
+    conn.close()
+    
+    invite_text = f"""📤 *نظام الدعوات*
 
-async def support(query, context):
-    await query.edit_message_text(
-        "📞 الدعم الفني:\n\n@Roulette_Panda_Support",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
-        ])
-    )
+🔗 رابط دعوتك الخاص:
+`{invite_link}`
 
-async def instructions(query, context):
-    await query.edit_message_text(
-        "📖 تعليمات الاستخدام:\n\n1. أضف قناتك\n2. أضف البوت كأدمن\n3. أنشئ روليت\n4. انضم للروليتات",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
-        ])
+🎯 *مكافآت الدعوات:*
+✅ لكل صديق يدخل عبر رابطك: +1 نقطة
+💰 صديقك يحصل على: 3 نقاط هدية
+
+📊 *إحصائيات دعواتك:*
+📨 عدد الدعوات الناجحة: {invites}
+💰 نقاط ربحتها: {invites} نقطة"""
+
+    keyboard = [
+        [InlineKeyboardButton("🔗 مشاركة الرابط", url=f"https://t.me/share/url?url={invite_link}&text=انضم%20إلى%20روليت%20MS%20-%20أفضل%20بوت%20سحوبات%20على%20تيليجرام!%20🎰")],
+        [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(invite_text, reply_markup=reply_markup, parse_mode='Markdown')
+
+async def settings_menu(query, context):
+    settings_text = """⚙️ *إعدادات البوت*
+
+🔔 *الإشعارات:*
+✅ تفعيل الإشعارات
+
+🌐 *اللغة:*
+🇸🇦 العربية
+
+🎰 *إعدادات الروليت:*
+🔢 عدد المشاركين: 10
+⏰ مدة الروليت: غير محددة"""
+
+    keyboard = [
+        [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(settings_text, reply_markup=reply_markup, parse_mode='Markdown')
+
+# الأوامر الإدارية
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    
+    keyboard = [
+        [InlineKeyboardButton("📊 إحصائيات البوت", callback_data="admin_stats")],
+        [InlineKeyboardButton("📢 إدارة القنوات الإجبارية", callback_data="admin_channels")],
+        [InlineKeyboardButton("👥 إدارة المستخدمين", callback_data="admin_users")],
+        [InlineKeyboardButton("💰 إضافة نقاط", callback_data="admin_add_points")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(
+        "🛠 *لوحة تحكم الأدمن*\n\nاختر الإدارة المناسبة:",
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
     )
 
 async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
     
-    conn = sqlite3.connect('panda_roulette.db', check_same_thread=False)
+    conn = sqlite3.connect('ms_roulette.db', check_same_thread=False)
     cursor = conn.cursor()
     
     cursor.execute('SELECT COUNT(*) FROM users')
@@ -588,14 +788,19 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cursor.execute('SELECT COUNT(*) FROM user_channels')
     total_channels = cursor.fetchone()[0]
     
+    cursor.execute('SELECT COUNT(*) FROM forced_channels')
+    total_forced = cursor.fetchone()[0]
+    
     conn.close()
     
     await update.message.reply_text(
-        f"📊 إحصائيات البوت:\n\n"
+        f"📊 *إحصائيات البوت:*\n\n"
         f"👥 المستخدمين: {total_users}\n"
         f"🎰 الروليتات: {total_roulettes}\n"
         f"🏆 المكتملة: {completed_roulettes}\n"
-        f"📢 القنوات: {total_channels}"
+        f"📢 القنوات: {total_channels}\n"
+        f"🔒 القنوات الإجبارية: {total_forced}",
+        parse_mode='Markdown'
     )
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -606,19 +811,22 @@ def main():
         print("❌ خطأ: BOT_TOKEN غير موجود!")
         return
     
-    print("🎉 بدء تشغيل بوت روليت Panda...")
+    print("🎉 بدء تشغيل بوت روليت MS...")
     
     init_db()
     
     application = Application.builder().token(BOT_TOKEN).build()
     
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("admin", admin_panel))
     application.add_handler(CommandHandler("stats", admin_stats))
     application.add_handler(CallbackQueryHandler(handle_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_channel_message))
     application.add_error_handler(error_handler)
     
     print("✅ البوت جاهز للاستخدام!")
+    print("🔹 للأعضاء: /start")
+    print("🔹 للأدمن: /admin")
     
     application.run_polling()
 

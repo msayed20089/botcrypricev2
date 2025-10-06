@@ -647,28 +647,28 @@ async def start_roulette(query, context):
 روليت MS جميع السحوبات - @{BOT_USERNAME}"""
 
             await context.bot.edit_message_text(
-                chat_id=roulette[2],
-                message_id=roulette[3],
-                text=roulette_text
-            )
-        except Exception as e:
-            logger.error(f"Error updating winner message: {e}")
-        
-        # إرسال رسالة للفائزين
-        for winner_id, winner_name in winners:
-            try:
-                await context.bot.send_message(
-                    winner_id,
-                    f"مبروك! فزت في الروليت #{roulette_id}\n\nربحت 10 نقاط!\n\nرصيدك الجديد: {get_balance(winner_id)} نقطة"
-                )
-            except:
-                pass
-        
-        conn.close()
-        
-        await query.answer("تم بدء السحب واختيار الفائزين!", show_alert=True)
-            
-   except Exception as e:
+            chat_id=roulette[2],
+    message_id=roulette[3],
+    text=roulette_text
+    )
+except Exception as e:
+    logger.error(f"Error updating winner message: {e}")
+
+# إرسال رسالة للفائزين
+for winner_id, winner_name in winners:
+    try:
+        await context.bot.send_message(
+            winner_id,
+            f"مبروك! فزت في الروليت #{roulette_id}\n\nربحت 10 نقاط!\n\nرصيدك الجديد: {get_balance(winner_id)} نقطة"
+        )
+    except:
+        pass
+
+conn.close()
+
+await query.answer("تم بدء السحب واختيار الفائزين!", show_alert=True)
+
+except Exception as e:
     logger.error(f"Error in start_roulette: {e}")
     await query.answer("حدث خطأ أثناء بدء السحب", show_alert=True)
 
@@ -678,6 +678,7 @@ async def view_participants(query, context):
         
         conn = sqlite3.connect('ms_roulette.db', check_same_thread=False)
         cursor = conn.cursor()
+        
         cursor.execute('SELECT user_name FROM participants WHERE roulette_id = ?', (roulette_id,))
         participants = cursor.fetchall()
         
@@ -688,6 +689,14 @@ async def view_participants(query, context):
             for i, (name,) in enumerate(participants, 1):
                 participants_text += f"{i}. {name}\n"
             
+            participants_text += f"\nالاجمالي: {len(participants)} مشارك"
+            await query.answer(participants_text, show_alert=True)
+        else:
+            await query.answer("لا يوجد مشاركين بعد!", show_alert=True)
+            
+    except Exception as e:
+        logger.error(f"Error in view_participants: {e}")
+        await query.answer("حدث خطأ", show_alert=True)
             participants_text += f"\nالاجمالي: {len(participants)} مشارك"
             await query.answer(participants_text, show_alert=True)
         else:

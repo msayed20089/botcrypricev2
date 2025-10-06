@@ -2,12 +2,12 @@ import logging
 import sqlite3
 import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 # إعدادات البوت
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8399150202:AAEvr37r05xzbjhwinnGZQIWAuoylpsNflg")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "6096879850"))
-BOT_USERNAME = "lllllllofdkokbot"  # يوزر البوت الجديد
+BOT_USERNAME = "lllllllofdkokbot"
 
 # إعداد التسجيل
 logging.basicConfig(
@@ -95,7 +95,7 @@ def add_points(user_id, points=1):
 def generate_invite_link(user_id):
     return f"https://t.me/{BOT_USERNAME}?start=ref_{user_id}"
 
-def start(update: Update, context: CallbackContext):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     args = context.args
@@ -144,43 +144,43 @@ def start(update: Update, context: CallbackContext):
 🎰 يمكنك إنشاء روليت سريع بكلفة نقطة واحدة
 📤 ادعِ أصدقائك واكسب نقطة عن كل دعوة ناجحة"""
 
-    update.message.reply_text(welcome_text, reply_markup=reply_markup)
+    await update.message.reply_text(welcome_text, reply_markup=reply_markup)
 
-def handle_callback(update: Update, context: CallbackContext):
+async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    query.answer()
+    await query.answer()
     
     data = query.data
     user_id = query.from_user.id
     
     if data == "create_quick_roulette":
-        create_roulette(query, context)
+        await create_roulette(query, context)
     elif data == "my_stats":
-        my_stats(query, context)
+        await my_stats(query, context)
     elif data == "invite_link":
-        invite_link(query, context)
+        await invite_link(query, context)
     elif data == "balance":
-        show_balance(query, context)
+        await show_balance(query, context)
     elif data == "gifts":
-        gifts_info(query, context)
+        await gifts_info(query, context)
     elif data == "settings":
-        settings_menu(query, context)
+        await settings_menu(query, context)
     elif data == "support":
-        support(query, context)
+        await support(query, context)
     elif data == "main_menu":
-        main_menu_callback(query, context)
+        await main_menu_callback(query, context)
     elif data.startswith("join_roulette_"):
-        join_roulette(query, context)
+        await join_roulette(query, context)
     elif data.startswith("stop_roulette_"):
-        stop_roulette(query, context)
+        await stop_roulette(query, context)
 
-def create_roulette(query, context):
+async def create_roulette(query, context):
     user_id = query.from_user.id
     
     has_balance, current_balance = check_balance(user_id)
     
     if not has_balance:
-        query.edit_message_text(
+        await query.edit_message_text(
             f"❌ رصيدك غير كافي!\n\n💰 رصيدك الحالي: {current_balance} نقطة\n💡 تحتاج إلى نقطة واحدة لإنشاء روليت\n\n📤 ادعِ أصدقائك لزيادة رصيدك!",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("📤 رابط الدعوة", callback_data="invite_link")],
@@ -207,7 +207,7 @@ def create_roulette(query, context):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    query.edit_message_text(
+    await query.edit_message_text(
         "🎰 *روليت سريع لـ 10 أشخاص!*\n\n"
         "📊 المشاركة ستغلق بعد اكتمال العدد\n\n"
         "👥 المشاركون: 1/10\n\n"
@@ -217,7 +217,7 @@ def create_roulette(query, context):
         parse_mode='Markdown'
     )
 
-def my_stats(query, context):
+async def my_stats(query, context):
     user_id = query.from_user.id
     
     conn = sqlite3.connect('roulette.db', check_same_thread=False)
@@ -262,9 +262,9 @@ def my_stats(query, context):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    query.edit_message_text(stats_text, reply_markup=reply_markup, parse_mode='Markdown')
+    await query.edit_message_text(stats_text, reply_markup=reply_markup, parse_mode='Markdown')
 
-def invite_link(query, context):
+async def invite_link(query, context):
     user_id = query.from_user.id
     invite_link = generate_invite_link(user_id)
     
@@ -298,9 +298,9 @@ def invite_link(query, context):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    query.edit_message_text(invite_text, reply_markup=reply_markup, parse_mode='Markdown')
+    await query.edit_message_text(invite_text, reply_markup=reply_markup, parse_mode='Markdown')
 
-def show_balance(query, context):
+async def show_balance(query, context):
     user_id = query.from_user.id
     conn = sqlite3.connect('roulette.db', check_same_thread=False)
     cursor = conn.cursor()
@@ -309,9 +309,9 @@ def show_balance(query, context):
     balance = result[0] if result else 5
     conn.close()
     
-    query.edit_message_text(f"💰 رصيدك الحالي: {balance} نقطة")
+    await query.edit_message_text(f"💰 رصيدك الحالي: {balance} نقطة")
 
-def gifts_info(query, context):
+async def gifts_info(query, context):
     user_id = query.from_user.id
     
     conn = sqlite3.connect('roulette.db', check_same_thread=False)
@@ -347,9 +347,9 @@ def gifts_info(query, context):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    query.edit_message_text(gifts_text, reply_markup=reply_markup, parse_mode='Markdown')
+    await query.edit_message_text(gifts_text, reply_markup=reply_markup, parse_mode='Markdown')
 
-def settings_menu(query, context):
+async def settings_menu(query, context):
     settings_text = """⚙️ *إعدادات البوت*
 
 🔔 *الإشعارات:*
@@ -370,15 +370,14 @@ def settings_menu(query, context):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    query.edit_message_text(settings_text, reply_markup=reply_markup, parse_mode='Markdown')
+    await query.edit_message_text(settings_text, reply_markup=reply_markup, parse_mode='Markdown')
 
-def support(query, context):
+async def support(query, context):
     support_text = """📞 *الدعم الفني*
 
 للاستفسارات والدعم الفني:
 
 👨‍💻 الدعم الفني: @M_N_ET
-
 ⏰ أوقات الدعم:
 من الساعة 9:00 صباحاً حتى 12:00 منتصف الليل
 
@@ -394,9 +393,9 @@ def support(query, context):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    query.edit_message_text(support_text, reply_markup=reply_markup, parse_mode='Markdown')
+    await query.edit_message_text(support_text, reply_markup=reply_markup, parse_mode='Markdown')
 
-def join_roulette(query, context):
+async def join_roulette(query, context):
     try:
         roulette_id = int(query.data.split('_')[2])
         user_id = query.from_user.id
@@ -406,7 +405,7 @@ def join_roulette(query, context):
         
         cursor.execute('SELECT * FROM participants WHERE roulette_id = ? AND user_id = ?', (roulette_id, user_id))
         if cursor.fetchone():
-            query.answer("أنت مشترك بالفعل في هذا الروليت!", show_alert=True)
+            await query.answer("أنت مشترك بالفعل في هذا الروليت!", show_alert=True)
             conn.close()
             return
         
@@ -420,13 +419,13 @@ def join_roulette(query, context):
         conn.commit()
         conn.close()
         
-        query.answer(f"تم انضمامك للروليت! ({current_participants}/{max_participants})", show_alert=True)
+        await query.answer(f"تم انضمامك للروليت! ({current_participants}/{max_participants})", show_alert=True)
         
     except Exception as e:
         logger.error(f"Error in join_roulette: {e}")
-        query.answer("حدث خطأ أثناء الانضمام للروليت", show_alert=True)
+        await query.answer("حدث خطأ أثناء الانضمام للروليت", show_alert=True)
 
-def stop_roulette(query, context):
+async def stop_roulette(query, context):
     try:
         roulette_id = int(query.data.split('_')[2])
         user_id = query.from_user.id
@@ -440,17 +439,17 @@ def stop_roulette(query, context):
         if result and result[0] == user_id:
             cursor.execute('UPDATE roulettes SET status = "stopped" WHERE id = ?', (roulette_id,))
             conn.commit()
-            query.answer("تم إيقاف الروليت بنجاح!", show_alert=True)
+            await query.answer("تم إيقاف الروليت بنجاح!", show_alert=True)
         else:
-            query.answer("只有创建者可以停止这个轮盘!", show_alert=True)
+            await query.answer("只有创建者可以停止这个轮盘!", show_alert=True)
         
         conn.close()
         
     except Exception as e:
         logger.error(f"Error in stop_roulette: {e}")
-        query.answer("حدث خطأ أثناء إيقاف الروليت", show_alert=True)
+        await query.answer("حدث خطأ أثناء إيقاف الروليت", show_alert=True)
 
-def main_menu_callback(query, context):
+async def main_menu_callback(query, context):
     user_id = query.from_user.id
     
     conn = sqlite3.connect('roulette.db', check_same_thread=False)
@@ -469,13 +468,13 @@ def main_menu_callback(query, context):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    query.edit_message_text(
+    await query.edit_message_text(
         f"🎰 *مرحباً بك في روليت MS* 🎰\n\n💰 رصيدك: {balance} نقطة\nاختر من القائمة:",
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
 
-def menu_command(update: Update, context: CallbackContext):
+async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     
@@ -495,7 +494,7 @@ def menu_command(update: Update, context: CallbackContext):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    update.message.reply_text(
+    await update.message.reply_text(
         f"🎰 *مرحباً بك في روليت MS* 🎰\n\n💰 رصيدك: {balance} نقطة\nاختر من القائمة:",
         reply_markup=reply_markup,
         parse_mode='Markdown'
@@ -504,22 +503,14 @@ def menu_command(update: Update, context: CallbackContext):
 def main():
     init_db()
     
-    updater = Updater(BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
+    application = Application.builder().token(BOT_TOKEN).build()
     
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("menu", menu_command))
-    dp.add_handler(CallbackQueryHandler(handle_callback))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("menu", menu_command))
+    application.add_handler(CallbackQueryHandler(handle_callback))
     
-    # استخدم Polling بدلاً من Webhook للبساطة
-    PORT = int(os.environ.get('PORT', 8443))
-    updater.start_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        url_path=BOT_TOKEN,
-        webhook_url=f"https://your-app-name.railway.app/{BOT_TOKEN}"
-    )
-    updater.idle()
+    # استخدم Polling للبساطة
+    application.run_polling()
 
 if __name__ == '__main__':
     main()

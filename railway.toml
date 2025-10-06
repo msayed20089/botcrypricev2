@@ -1,0 +1,17 @@
+[deploy]
+build.command = "echo 'No build needed'"
+
+[build]
+builder = "nixpacks"
+
+[[services]]
+name = "main-bot"
+source_path = "."
+run = "python main_bot.py"
+ports = [8443]
+
+[[services]]
+name = "admin-bot" 
+source_path = "."
+run = "python admin_bot.py"
+ports = [8444]
